@@ -47,6 +47,8 @@ function setup_game()
   shoot_cooldown = 100
   background_location = 0
   error_message = "GAME_IS_OVER"
+
+  boss_spawned = false
 end
 
 function handle_input()
@@ -113,6 +115,15 @@ function love.load(arg)
   asset_bad_spaceship = love.graphics.newImage("/assets/bad_spaceship.png")
   asset_bad_bullet = love.graphics.newImage("/assets/bad_bullet.png")
 
+  -- Boss ----------------------------------------------------------------------
+  assets_boss_a = love.graphics.newImage("/assets/boss_a.png")
+  assets_boss_b = love.graphics.newImage("/assets/boss_b.png")
+  assets_boss_c = love.graphics.newImage("/assets/boss_c.png")
+  assets_boss_shield = love.graphics.newImage("/assets/boss_shield.png")
+
+  assets_engine_a = love.graphics.newImage("/assets/boss_engine_a.png")
+  assets_engine_b = love.graphics.newImage("/assets/boss_engine_b.png")
+
   asset_explosion = love.audio.newSource("/assets/explosion.wav", type)
   asset_speedup = love.audio.newSource("/assets/speed_up.wav", type)
   asset_loop = love.audio.newSource("/assets/loop.wav", type)
@@ -177,8 +188,6 @@ function love.update(dt)
     exploding = true
   end
 end
-
-
 
 function love.draw()
   height_scale_factor = love.graphics.getHeight() / 600
@@ -511,7 +520,7 @@ end
 
 -- Ennemy ----------------------------------------------------------------------
 
-function create_ennemy(x, y, speed_x, speed_y, type)
+function create_ennemy(x, y, speed_x, speed_y, type, state)
 ennemies[ennemies_count] =  {
                               type = type, -- type of the ennemy.
                               x = x, -- X position
@@ -525,17 +534,40 @@ ennemies[ennemies_count] =  {
                               colide = true
                             }
 
+  if type == "engine" then
+    ennemies[ennemies_count]["height"] = 160
+    ennemies[ennemies_count]["width"] = 40
+    ennemies[ennemies_count]["state"] = state
+    ennemies[ennemies_count]["rotation_speed"] = 0
+    ennemies[ennemies_count]["speed_y"] = 1
+    ennemies[ennemies_count]["speed_x"] = 0
+  end
+
+  if type == "boss" then
+    ennemies[ennemies_count]["height"] = 256
+    ennemies[ennemies_count]["width"] = 128
+    ennemies[ennemies_count]["cooldown"] = 25
+    ennemies[ennemies_count]["heal"] = 5
+    ennemies[ennemies_count]["state"] = 0
+
+    ennemies[ennemies_count]["rotation_speed"] = 0
+    ennemies[ennemies_count]["speed_y"] = 10
+    ennemies[ennemies_count]["speed_x"] = 0
+    ennemies[ennemies_count]["take_damage"] = 0
+  end
+
   if type == "satellite" then
     ennemies[ennemies_count]["height"] = 128
     ennemies[ennemies_count]["width"] = 128
-    rotation_speed = math.random(-10, 10) / 10000
+    ennemies[ennemies_count]["rotation_speed"] = math.random(-10, 10) / 10000
   end
 
   if type == "bad_bullet" then
     ennemies[ennemies_count]["height"] = 8
     ennemies[ennemies_count]["width"] = 8
     ennemies[ennemies_count]["colide"] = false
-    speed_y = 25
+    ennemies[ennemies_count]["speed_y"] = 10
+    ennemies[ennemies_count]["not_speed_relative"] = true
   end
 
   if type == "bad_spaceship" then
@@ -543,9 +575,10 @@ ennemies[ennemies_count] =  {
     ennemies[ennemies_count]["width"] = 64
     ennemies[ennemies_count]["cooldown"] = 25
     ennemies[ennemies_count]["lifetime"] = 300
-    rotation_speed = 0
-    speed_y = 10
-    speed_x = 0
+    ennemies[ennemies_count]["rotation_speed"] = 0
+    ennemies[ennemies_count]["speed_y"] = 10
+    ennemies[ennemies_count]["speed_x"] = 0
+    ennemies[ennemies_count]["not_speed_relative"] = true
   end
 
   if type == "spacestation" then
@@ -556,6 +589,13 @@ ennemies[ennemies_count] =  {
     if (ennemies[ennemies_count]["right"] == 0) then
       ennemies[ennemies_count]["x"] = love.graphics.getWidth() - ennemies[ennemies_count]["width"]
     end
+  end
+
+  if type == "smoke" then
+    ennemies[ennemies_count]["height"] = 32
+    ennemies[ennemies_count]["width"] = 32
+    ennemies[ennemies_count]["lifetime"] = 255
+    ennemies[ennemies_count]["colide"] = false
   end
 
   if type == "space_rock_frag" then
@@ -620,6 +660,31 @@ function draw_ennemy()
       love.graphics.draw(asset_bad_spaceship, e["x"], e["y"], e["rotation"], 2, 2)
     end
 
+    if e["type"] == "boss" then
+
+      if e["state"] == 0 then
+        love.graphics.draw(assets_boss_a, e["x"] - 64, e["y"], e["rotation"], 2, 2)
+      end
+      if e["state"] == 1 then
+        love.graphics.draw(assets_boss_b, e["x"] - 64, e["y"], e["rotation"], 2, 2)
+      end
+      if e["state"] == 2 then
+        love.graphics.draw(assets_boss_c, e["x"] - 64, e["y"], e["rotation"], 2, 2)
+      end
+      love.graphics.setColor(255, 255, 255, e["take_damage"])
+      love.graphics.draw(assets_boss_shield, e["x"] - 64, e["y"], e["rotation"], 2, 2)
+      love.graphics.setColor(255, 255, 255, 255)
+    end
+
+    if e["type"] == "engine" then
+      if e["state"] == 0 then
+        love.graphics.draw(assets_engine_a, e["x"], e["y"], e["rotation"], 2, 2)
+      end
+      if e["state"] == 1 then
+        love.graphics.draw(assets_engine_b, e["x"], e["y"], e["rotation"], 2, 2)
+      end
+    end
+
     if e["type"] == "bad_bullet" then
       love.graphics.draw(asset_bad_bullet, e["x"], e["y"] - 60, 0, 2, 2)
     end
@@ -680,8 +745,15 @@ function update_ennemy(dt)
     local is_death = false
     e["x"] = e["x"] + e["speed_x"]
 
-    if e["type"] == "bad_spaceship" then
+
+    if not e["not_speed_relative"] then
+      e["y"] = e["y"] + e["speed_y"] + spaceship_speed_y
+    else
       e["y"] = e["y"] + e["speed_y"]
+    end
+
+    if e["type"] == "bad_spaceship" then
+
       e["lifetime"] = e["lifetime"] - 1
       e["speed_y"] = e["speed_y"] + 0.1
 
@@ -710,24 +782,68 @@ function update_ennemy(dt)
 
         e["cooldown"] = e["cooldown"] - 1
       end
-
-    else
-      e["y"] = e["y"] + e["speed_y"] + spaceship_speed_y
     end
 
+    -- Boss --------------------------------------------------------------------
+    if e["type"] == "boss" then
+      e["speed_y"] = e["speed_y"] + 0.1
+
+      if e["take_damage"] > 0 then e["take_damage"] = e["take_damage"] / 1.1 end
+
+      if e["y"] >= 16 then
+        e["speed_y"] = 0
+        e["y"] = 16
+
+        if spaceship_x > e["x"] then
+          e["speed_x"] = e["speed_x"] + 1
+        else
+          e["speed_x"] = e["speed_x"] - 1
+        end
+
+        if e["speed_x"] > spaceship_max_speed then
+          e["speed_x"] = spaceship_max_speed * 0.1
+        end
+
+        if e["speed_x"] < -spaceship_max_speed then
+          e["speed_x"] = -spaceship_max_speed * 0.1
+        end
+
+        if e["cooldown"] <= 0 then
+
+          create_ennemy(e["x"] + 62, e["y"] + 30, 0, 1, "bad_bullet")
+
+          if e["state"] == 0 then
+            create_ennemy(e["x"] + 62 - 41, e["y"] + 30, 0, 1, "bad_bullet")
+
+          end
+
+          if e["state"] < 2 then
+            create_ennemy(e["x"] + 62 + 41, e["y"] + 30, 0, 1, "bad_bullet")
+          end
+
+          soundmanager_play("/assets/shoot.wav")
+          e["cooldown"] = 40
+        end
+
+        e["cooldown"] = e["cooldown"] - 1
+      end
+
+    end
+
+    -- Ennemies bullets ----------------------------------------------------------------
     if e["type"] == "bad_bullet" then
       for k,v in pairs(ennemies) do
-        if not (v["type"] == "bad_bullet" or v["type"] == "bad_spaceship") then
+        if not (v["type"] == "bad_bullet" or v["type"] == "bad_spaceship" or v["type"] == "boss") then
           if CheckCollision(e["x"], e["y"], e["width"], e["height"], v["x"], v["y"], v["width"], v["height"]) then
-            if v["colide"] then
-            ennemies[i] = nil
+
             spaceship_lazers_colide_ennemy(k,v)
-            end
+
           end
         end
       end
     end
 
+    -- Fragments ---------------------------------------------------------------
     if e["type"] == "space_rock_frag" or e["type"] == "spacestation_frag" or e["type"] == "bad_spaceship_frag" then
       e["lifetime"] = e["lifetime"] - 1
       if e["lifetime"] == 0 then
@@ -765,6 +881,12 @@ function update_ennemy_spawning(dt)
     if math.random(0, 5000 / spawnrate)  == 0 then
       create_ennemy(math.random(0, love.graphics.getWidth()),math.random(-500, -250), math.random(-100, 100) / 100,1, "satellite")
     end
+
+    if not boss_spawned and spaceship_y > 25000 then
+      create_ennemy(math.random(0, love.graphics.getWidth()), -500, 0, 1, "boss")
+      spawn_disable = true
+      boss_spawned = true
+    end
   end
 end
 
@@ -775,6 +897,16 @@ function ennemy_colide_space_ship(ennemy_id, ennemy)
     spaceship_power = spaceship_power - 10
     spaceship_takedamages = 255
     soundmanager_play("/assets/explosion.wav")
+    ennemies[ennemy_id] = nil
+  end
+
+  if (ennemy["type"] == "engine") then
+    ennemies[ennemy_id] = nil
+    spaceship_heal = spaceship_heal - 10
+    spaceship_power = spaceship_power - 10
+    spaceship_takedamages = 255
+    soundmanager_play("/assets/explosion.wav")
+    ennemies[ennemy_id] = nil
   end
 
   if (ennemy["type"] == "satellite") then
@@ -783,6 +915,7 @@ function ennemy_colide_space_ship(ennemy_id, ennemy)
     spaceship_power = spaceship_power - 15
     spaceship_takedamages = 255
     soundmanager_play("/assets/explosion.wav")
+    ennemies[ennemy_id] = nil
   end
 
   if (ennemy["type"] == "heal_pack") then
@@ -815,8 +948,45 @@ function ennemy_colide_space_ship(ennemy_id, ennemy)
 end
 
 function spaceship_lazers_colide_ennemy(i,e)
-  ennemies[i] = nil
-  soundmanager_play("/assets/explosion.wav")
+  if e["type"] == "boss" then
+    e["heal"] = e["heal"] - 1
+    e["take_damage"] = 255
+    if e["heal"] == 0 then
+      if e["state"] == 0 then
+        create_ennemy(e["x"] - 40, e["y"], 0, 0, "engine", 0)
+      end
+
+      if e["state"] == 1 then
+        create_ennemy(e["x"] + 128, e["y"], 0, 0, "engine", 1)
+      end
+
+      for i=0,math.random(1, 5) do
+        create_ennemy(e["x"], e["y"], math.random(-10, 10) / 10, math.random(-10, 10) / 10, "heal_pack")
+      end
+
+      for i=0,math.random(1, 5) do
+        create_ennemy(e["x"], e["y"], math.random(-10, 10) / 10, math.random(-10, 10) / 10, "power_pack")
+      end
+
+      e["state"] = e["state"] + 1
+      e["heal"] = 2
+    end
+
+    if e["state"] == 3 then
+      spawn_disable = false
+      ennemies[i] = nil
+
+      for i=0,math.random(1, 5) do
+        create_ennemy(e["x"], e["y"], math.random(-10, 10) / 10, math.random(-10, 10) / 10, "space_rock_frag")
+      end
+
+      for i=0,math.random(1, 5) do
+        create_ennemy(e["x"], e["y"], math.random(-10, 10) / 10, math.random(-10, 10) / 10, "power_pack")
+      end
+    end
+
+    soundmanager_play("/assets/explosion.wav")
+  end
 
   if e["type"] == "space_rock" then
     for i=0,math.random(1, 5) do
@@ -830,6 +1000,9 @@ function spaceship_lazers_colide_ennemy(i,e)
     if math.random(0, 15) == 0 then
       create_ennemy(e["x"], e["y"], math.random(-1, 1), math.random(-1, 1), "power_pack")
     end
+
+    ennemies[i] = nil
+    soundmanager_play("/assets/explosion.wav")
   end
 
   if e["type"] == "bad_spaceship" then
@@ -840,6 +1013,29 @@ function spaceship_lazers_colide_ennemy(i,e)
     create_ennemy(e["x"], e["y"], math.random(-1, 1), math.random(-1, 1), "power_pack")
     create_ennemy(e["x"], e["y"], math.random(-1, 1), math.random(-1, 1), "power_pack")
     create_ennemy(e["x"], e["y"], math.random(-1, 1), math.random(-1, 1), "power_pack")
+
+    ennemies[i] = nil
+    soundmanager_play("/assets/explosion.wav")
+  end
+
+  if e["type"] == "engine" then
+    for i=0,math.random(1, 3) do
+      create_ennemy(e["x"], e["y"], math.random(-1, 1), math.random(-1, 1), "bad_spaceship_frag")
+    end
+
+    for i=0,math.random(1, 10) do
+      create_ennemy(e["x"] +  math.random(100, 326), e["y"], math.random(-1, 1), math.random(-1, 1), "spacestation_frag")
+    end
+    for i=0,math.random(1, 5) do
+      create_ennemy(e["x"], e["y"], math.random(-10, 10) / 10, math.random(-10, 10) / 10, "heal_pack")
+    end
+
+    for i=0,math.random(1, 5) do
+      create_ennemy(e["x"], e["y"], math.random(-10, 10) / 10, math.random(-10, 10) / 10, "power_pack")
+    end
+
+    ennemies[i] = nil
+    soundmanager_play("/assets/explosion.wav")
   end
 
   if e["type"] == "spacestation" then
@@ -859,6 +1055,9 @@ function spaceship_lazers_colide_ennemy(i,e)
     for i=0,math.random(1, 10) do
       create_ennemy(e["x"] +  math.random(100, 326), e["y"], math.random(-1, 1), math.random(-1, 1), "spacestation_frag")
     end
+
+    ennemies[i] = nil
+    soundmanager_play("/assets/explosion.wav")
   end
 
   if e["type"] == "satellite" then
@@ -873,6 +1072,9 @@ function spaceship_lazers_colide_ennemy(i,e)
     for i=0,math.random(1, 3) do
       create_ennemy(e["x"], e["y"], math.random(-1, 1), math.random(-1, 1), "power_pack")
     end
+
+    ennemies[i] = nil
+    soundmanager_play("/assets/explosion.wav")
   end
 end
 
@@ -889,16 +1091,15 @@ soundmanager_sources = {}
 function update_soundmanager()
 
   local remove = {}
-          for _,s in pairs(soundmanager_sources) do
-              if s:isStopped() then
-                  remove[#remove + 1] = s
-              end
-          end
+  for _,s in pairs(soundmanager_sources) do
+      if s:isStopped() then
+          remove[#remove + 1] = s
+      end
+  end
 
-          for i,s in ipairs(remove) do
-              soundmanager_sources[s] = nil
-          end
-
+  for i,s in ipairs(remove) do
+      soundmanager_sources[s] = nil
+  end
 end
 
 function soundmanager_play(source)
