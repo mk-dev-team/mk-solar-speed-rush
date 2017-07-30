@@ -772,13 +772,19 @@ function update_ennemy(dt)
       e["lifetime"] = e["lifetime"] - 1
       e["speed_y"] = e["speed_y"] + 0.1
 
+
+
       if e["y"] > 16 and not (e["lifetime"] < 0) then
         e["speed_y"] = 0
 
-        if spaceship_x > e["x"] then
-          e["speed_x"] = e["speed_x"] + 1
+        if not (math.abs(spaceship_x - e["x"]) > 128) then
+          e["x"] = e["x"] + (spaceship_x - e["x"]) * 0.1
         else
-          e["speed_x"] = e["speed_x"] - 1
+          if spaceship_x > e["x"] then
+            e["speed_x"] = e["speed_x"] + 1
+          else
+            e["speed_x"] = e["speed_x"] - 1
+          end
         end
 
         if e["speed_x"] > spaceship_max_speed then
@@ -809,10 +815,14 @@ function update_ennemy(dt)
         e["speed_y"] = 0
         e["y"] = 16
 
-        if spaceship_x > e["x"] then
-          e["speed_x"] = e["speed_x"] + 1
+        if not (math.abs(spaceship_x - e["x"]) > 128) then
+          e["x"] = e["x"] + (spaceship_x - e["x"]) * 0.1
         else
-          e["speed_x"] = e["speed_x"] - 1
+          if spaceship_x > e["x"] then
+            e["speed_x"] = e["speed_x"] + 1
+          else
+            e["speed_x"] = e["speed_x"] - 1
+          end
         end
 
         if e["speed_x"] > spaceship_max_speed then
