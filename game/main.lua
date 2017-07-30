@@ -139,6 +139,7 @@ function love.load(arg)
   assets_engine_a = love.graphics.newImage("assets/boss_engine_a.png")
   assets_engine_b = love.graphics.newImage("assets/boss_engine_b.png")
 
+  asset_explosion = love.audio.newSource("assets/explosion.wav", "stream")
   asset_speedup = love.audio.newSource("assets/speed_up.wav", "stream")
   asset_loop = love.audio.newSource("assets/loop.wav", "stream")
 
@@ -1038,7 +1039,7 @@ function spaceship_lazers_colide_ennemy(i,e)
     end
 
     for i=0,math.random(1, 10) do
-      create_ennemy(e["x"] +  math.random(100, 326), e["y"], math.random(-1, 1), math.random(-1, 1), "spacestation_frag")
+      create_ennemy(e["x"], e["y"], math.random(-1, 1), math.random(-1, 1), "spacestation_frag")
     end
     for i=0,math.random(1, 5) do
       create_ennemy(e["x"], e["y"], math.random(-10, 10) / 10, math.random(-10, 10) / 10, "heal_pack")
