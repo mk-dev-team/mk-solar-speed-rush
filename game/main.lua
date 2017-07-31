@@ -8,7 +8,7 @@ function setup_game()
   is_game_finish = false
   is_game_win = false
   is_start_screen = true
-  DEBUG = false
+  DEBUG = true
   nuclear_reactor_thrown = false
   nuclear_reactor_x = 0
   nuclear_reactor_y = love.graphics.getHeight()
@@ -755,6 +755,8 @@ function draw_ennemy()
   end
 end
 
+test = 0
+test_2 = 0
 function update_ennemy(dt)
   for i,e in pairs(ennemies) do
     local is_death = false
