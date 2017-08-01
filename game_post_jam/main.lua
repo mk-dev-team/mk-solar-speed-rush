@@ -1,6 +1,6 @@
 current_scene = "splash_screen" -- splash_screen, main_menu, game, end_game
 total_elapsed_time = 0
-DEBUG = true
+DEBUG = false
 
 function love.load(arg)
   love.graphics.setDefaultFilter("nearest", "nearest", 0)
@@ -11,11 +11,11 @@ function love.load(arg)
 end
 
 function load_assets()
-  asset_background = love.graphics.newImage("assets/background.png")
-  asset_background_cloud = love.graphics.newImage("assets/background_cloud.png")
-  asset_background_stars_a = love.graphics.newImage("assets/background_stars_a.png")
-  asset_background_stars_b = love.graphics.newImage("assets/background_stars_b.png")
-  asset_background_stars_c = love.graphics.newImage("assets/background_stars_c.png")
+  asset_background = love.graphics.newImage("assets/background/background.png")
+  asset_background_cloud = love.graphics.newImage("assets/background/background_cloud.png")
+  asset_background_stars_a = love.graphics.newImage("assets/background/background_stars_a.png")
+  asset_background_stars_b = love.graphics.newImage("assets/background/background_stars_b.png")
+  asset_background_stars_c = love.graphics.newImage("assets/background/background_stars_c.png")
 end
 
 -- Update ----------------------------------------------------------------------
@@ -84,7 +84,7 @@ end
 splash_time = 0
 
 function splash_screen_setup()
-  asset_maker_logo = love.graphics.newImage("assets/maker.png")
+  asset_maker_logo = love.graphics.newImage("assets/logos/maker.png")
   asset_font_bebas = love.graphics.newFont("assets/bebas.ttf", 26)
 end
 
@@ -113,8 +113,8 @@ function main_menu_switch()
 end
 
 function main_menu_setup()
-  asset_game_logo = love.graphics.newImage("assets/game_logo.png")
-  asset_help = love.graphics.newImage("assets/help.png")
+  asset_game_logo = love.graphics.newImage("assets/logos/game_logo.png")
+  asset_help = love.graphics.newImage("assets/overlays/help.png")
 end
 
 function update_main_menu(delta_time)
@@ -143,25 +143,33 @@ function game_switch()
   current_scene = "game"
   setup_space_ship()
 
+
   game = {}
   game.progress = 0
   game.max_progress = 50000
+  asset_speedup:setVolume(0)
   asset_speedup:play()
   asset_speedup:setLooping(true)
+  game.entities = {}
+  game.entities_count = 0
 end
 
 function game_setup()
   -- spaceship -----------------------------------------------------------------
-  asset_spaceship = love.graphics.newImage("assets/spaceship.png")
-  asset_truster = love.graphics.newImage("assets/truster.png")
-  asset_bullet = love.graphics.newImage("assets/bullet.png")
+  asset_spaceship = love.graphics.newImage("assets/spaceship/spaceship.png")
+  asset_truster = love.graphics.newImage("assets/spaceship/truster.png")
+  asset_bullet = love.graphics.newImage("assets/spaceship/bullet.png")
 
-  asset_speedup = love.audio.newSource("assets/speed_up.wav", "stream")
+  asset_speedup = love.audio.newSource("assets/sound_effects/speed_up.wav", "stream")
+
+  entities_setup()
 end
 
 function update_game(delta_time)
-  update_spaceship_bullet()
+  update_spawning(delta_time)
+  update_spaceship_bullet(delta_time)
   update_spaceship(delta_time)
+  update_entities(delta_time)
 end
 
 function draw_game()
@@ -169,8 +177,17 @@ function draw_game()
   love.graphics.rectangle("line", 4, 4, love.graphics.getWidth() - 8, love.graphics.getHeight() - 8)
   draw_spaceship_bullet()
   draw_spaceship()
+  draw_entities()
+  draw_gui()
 end
 
+-- GUI -------------------------------------------------------------------------
+function draw_gui()
+  if DEBUG then
+    love.graphics.print("Fps: ".. love.timer.getFPS(), 16, 16)
+    love.graphics.print("Entities Count: ".. entities_counter, 16, 32)
+  end
+end
 -- Spaceship -------------------------------------------------------------------
 
 function setup_space_ship()
@@ -196,6 +213,8 @@ function setup_space_ship()
 
   spaceship.width = 64
   spaceship.height = 64
+
+  spaceship.bullet_speed = 10
 end
 
 function update_spaceship(delta_time)
@@ -282,7 +301,7 @@ end
 
 -- spaceship shoot -------------------------------------------------------------
 function spaceship_shoot_bullet(x)
-  soundmanager_play("assets/shoot.wav")
+  soundmanager_play("assets/sound_effects/shoot.wav")
   spaceship.shooted_bullet[spaceship.shooted_bullet_count] = {x = x, y = love.graphics.getHeight() - 100, size = 4}
   spaceship.shooted_bullet_count = spaceship.shooted_bullet_count + 1
 end
@@ -291,7 +310,13 @@ function update_spaceship_bullet()
   for i,e in pairs(spaceship.shooted_bullet) do
     if e.y < -256 then spaceship.shooted_bullet[i] = nil
     else
-    e.y = e.y - 10
+      e.y = e.y - spaceship.bullet_speed
+
+      for k,v in pairs(game.entities) do
+        if CheckCollision (e.x,e.y,e.size,e.size, v.x,v.y,v.width,v.height ) then
+          entity_colide_spaceship_shoot(v, i)
+        end
+      end
     end
   end
 end
@@ -306,19 +331,153 @@ end
 -- Entities --------------------------------------------------------------------
 
 function entities_setup()
+  -- Load ressource ------------------------------------------------------------
+  asset_asteroid = love.graphics.newImage("assets/ennemies/asteroid.png")
+end
+
+function create_entity(type, x, y, speed_x, speed_y, life_time, atribut)
+  local entity = {id = game.entities_count,
+                  type = type,
+                  x = x,
+                  y = y,
+                  width = 64,
+                  height = 64,
+                  rotation = 0,
+                  rotation_speed = 0,
+                  speed = {x = speed_x,
+                           y = speed_y},
+
+                  life_time = 0,
+                  max_life_time = life_time,
+                  atribut = atribut,
+
+                  is_coliding = false
+                  }
+
+  game.entities_count = game.entities_count + 1
+
+  -- Define entity here --------------------------------------------------------
+  if type == "asteroid" then
+    entity.rotation_speed = math.random(-100, 100) / 1000
+  end
+
+  if type == "particle" then
+    entity.width = 8
+    entity.height = 8
+  end
+
+  return entity
+end
+
+-- Entity spwning --------------------------------------------------------------
+
+function update_spawning(delta_time)
+
+  spawn_factor = ((spaceship.speed.y / spaceship.max_speed.y) * width_scale_factor)
+
+  if game.progress > game.max_progress * 0.01 and math.random(0, math.floor(10 / spawn_factor)) == 0 then
+    add_entity(create_entity("asteroid", math.random(0, love.graphics.getWidth()), -128, 0, 0, 60))
+  end
+end
+
+-- Draw entity -----------------------------------------------------------------
+function draw_entities()
+  for k,v in pairs(game.entities) do
+    if DEBUG then
+      if v.is_coliding then
+        love.graphics.setColor(255,0,0,255)
+      end
+
+      love.graphics.rectangle("line", v.x, v.y, v.width, v.height)
+      love.graphics.setColor(255,255,255,255)
+    end
+    if v.type == "asteroid" then
+      love.graphics.draw(asset_asteroid, v.x + 32, v.y + 32, v.rotation, 2, 2, 16, 16)
+    end
+
+    if v.type == "particle" then
+      love.graphics.setColor(v.atribut.red, v.atribut.green, v.atribut.blue, ((v.max_life_time - v.life_time) / v.max_life_time) * 255)
+      if v.atribut.particle_type == "dot" then
+        love.graphics.setPointSize(v.atribut.size)
+        love.graphics.points(v.x, v.y)
+        love.graphics.setPointSize(1)
+      end
+      love.graphics.setColor(255,255,255,255)
+    end
+  end
+end
+
+-- Update Entity ---------------------------------------------------------------
+function update_entities(delta_time)
+  for _,v in pairs(game.entities) do
+    if v.life_time > v.max_life_time or v.y > love.graphics.getHeight() + 512 then
+      remove_entity(v)
+    else
+      v.life_time = v.life_time + delta_time
+      v.y = v.y + spaceship.speed.y + v.speed.y
+      v.x = v.x + v.speed.x
+      v.rotation = v.rotation + v.rotation_speed
+      v.is_coliding = false
+      -- Entity logic here -----------------------------------------------------
+      if v.type == "asteroid" then
+
+      end
+
+      -- Check collision with the spaceship ------------------------------------
+      if CheckCollision(v.x,v.y, v.width, v.height, spaceship.x, spaceship.y, spaceship.height, spaceship.width) then
+        entity_colide_spaceship(v)
+        v.is_coliding = true
+      end
+
+      -- Check collision with other entities -----------------------------------
+      for _,e in pairs(game.entities) do
+        if CheckCollision(v.x,v.y, v.width, v.height, e.x, e.y, e.height, e.width) and not (e.id == v.id) then
+          entity_colide_entity(v, e)
+          v.is_coliding = true
+        end
+      end
+    end
+  end
+end
+
+-- Entities interaction --------------------------------------------------------
+
+function entity_colide_entity(entity_a, entity_b)
 
 end
 
-function entities_update(delta_time)
+function entity_colide_spaceship(entity)
 
 end
 
-function entities_draw()
+function entity_colide_spaceship_shoot(entity, shoot)
+  if entity.type == "asteroid" then
+    for i=1,10 do
+      local brightness = math.random(50, 100) / 100
+      emite_particle("dot", entity.x + 32, entity.y + 32, 4, math.random(-100, 100) / 100, (-math.random(0, 500)) / 100, 1 * math.random(50, 100) / 100, 86 * brightness, 68 * brightness, 58 * brightness)
+    end
+    spaceship.shooted_bullet[shoot] = nil
+    remove_entity(entity)
+  end
+end
 
+-- Entity managment ------------------------------------------------------------
+entities_counter = 0
+function add_entity(entity)
+  entities_counter = entities_counter + 1
+  game.entities[entity.id] = entity
+end
+
+function remove_entity(entity)
+  entities_counter = entities_counter - 1
+  game.entities[entity.id] = nil
+end
+
+function emite_particle(type, x, y, size, speed_x, speed_y, life_time, red, green, blue)
+  add_entity(create_entity("particle", x, y, speed_x, speed_y, life_time, {particle_type = type, size = size, red = red, green = green, blue = blue}))
 end
 
 -- End Game Screen -------------------------------------------------------------
-
 function end_game_setup()
 
 end
