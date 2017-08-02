@@ -8,7 +8,7 @@ function setup_game()
   is_game_finish = false
   is_game_win = false
   is_start_screen = true
-  DEBUG = true
+  DEBUG = false
   nuclear_reactor_thrown = false
   nuclear_reactor_x = 0
   nuclear_reactor_y = love.graphics.getHeight()

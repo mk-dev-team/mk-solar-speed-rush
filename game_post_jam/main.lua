@@ -2,12 +2,36 @@ current_scene = "splash_screen" -- splash_screen, main_menu, game, end_game
 total_elapsed_time = 0
 DEBUG = false
 
+blur_shader = [[
+
+varying vec4 vpos;
+
+#ifdef VERTEX
+vec4 position( mat4 transform_projection, vec4 vertex_position )
+{
+    vpos = vertex_position;
+    return transform_projection * vertex_position;
+}
+#endif
+
+#ifdef PIXEL
+vec4 effect( vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords )
+{
+    texture_coords += vec2(cos(vpos.x), sin(vpos.y));
+    vec4 texcolor = Texel(texture, texture_coords);
+    return texcolor * color;
+}
+#endif
+
+]]
+
 function love.load(arg)
   love.graphics.setDefaultFilter("nearest", "nearest", 0)
   load_assets()
   splash_screen_setup()
   main_menu_setup()
   game_setup()
+  end_game_setup()
 end
 
 function load_assets()
@@ -16,6 +40,9 @@ function load_assets()
   asset_background_stars_a = love.graphics.newImage("assets/background/background_stars_a.png")
   asset_background_stars_b = love.graphics.newImage("assets/background/background_stars_b.png")
   asset_background_stars_c = love.graphics.newImage("assets/background/background_stars_c.png")
+
+  asset_font_bebas = love.graphics.newFont("assets/bebas.ttf", 26)
+  asset_font_bebas_big = love.graphics.newFont("assets/bebas.ttf", 48)
 end
 
 -- Update ----------------------------------------------------------------------
@@ -47,6 +74,9 @@ end
 
 -- Draw ------------------------------------------------------------------------
 function love.draw()
+
+  love.graphics.setLineStyle("rough")
+
   height_scale_factor = love.graphics.getHeight() / 600
   width_scale_factor =  love.graphics.getWidth() / 800
 
@@ -57,7 +87,7 @@ function love.draw()
   elseif current_scene == "game" then
     draw_game()
   elseif current_scene == "end_game" then
-
+    draw_end_game()
   end
 end
 
@@ -85,7 +115,6 @@ splash_time = 0
 
 function splash_screen_setup()
   asset_maker_logo = love.graphics.newImage("assets/logos/maker.png")
-  asset_font_bebas = love.graphics.newFont("assets/bebas.ttf", 26)
 end
 
 function update_splash_screen(delta_time)
@@ -152,6 +181,7 @@ function game_switch()
   asset_speedup:setLooping(true)
   game.entities = {}
   game.entities_count = 0
+  game.score = 0
 end
 
 function game_setup()
@@ -159,6 +189,8 @@ function game_setup()
   asset_spaceship = love.graphics.newImage("assets/spaceship/spaceship.png")
   asset_truster = love.graphics.newImage("assets/spaceship/truster.png")
   asset_bullet = love.graphics.newImage("assets/spaceship/bullet.png")
+  asset_shield = love.graphics.newImage("assets/spaceship/shield.png")
+  asset_damage_overlay = love.graphics.newImage("assets/overlays/damage_overlay.png")
 
   asset_speedup = love.audio.newSource("assets/sound_effects/speed_up.wav", "stream")
 
@@ -170,15 +202,23 @@ function update_game(delta_time)
   update_spaceship_bullet(delta_time)
   update_spaceship(delta_time)
   update_entities(delta_time)
+
+  if (spaceship.heal < 1) or (spaceship.power < 1) then
+    end_game_switch()
+  end
 end
 
 function draw_game()
   draw_paralax(game.progress, 0.25)
-  love.graphics.rectangle("line", 4, 4, love.graphics.getWidth() - 8, love.graphics.getHeight() - 8)
   draw_spaceship_bullet()
   draw_spaceship()
   draw_entities()
   draw_gui()
+  love.graphics.setColor(255, 255, 255, spaceship.damage_cooldown)
+  love.graphics.draw(asset_damage_overlay, 0, 0, 0, width_scale_factor, height_scale_factor)
+  love.graphics.setColor(255, 255, 255, 255)
+  love.graphics.rectangle("line", 4, 4, love.graphics.getWidth() - 8, love.graphics.getHeight() - 8)
+
 end
 
 -- GUI -------------------------------------------------------------------------
@@ -187,14 +227,47 @@ function draw_gui()
     love.graphics.print("Fps: ".. love.timer.getFPS(), 16, 16)
     love.graphics.print("Entities Count: ".. entities_counter, 16, 32)
   end
+
+  local progress_bar_spacecing = 16
+  local progress_bar_width = (love.graphics.getWidth() - 4 * progress_bar_spacecing) / 3
+  local progress_bar_y = love.graphics.getHeight() - progress_bar_spacecing - 16
+
+  love.graphics.setColor(255, 255, 255, 255)
+  love.graphics.print("Heal:", progress_bar_spacecing, progress_bar_y - 16)
+  love.graphics.print("Power:", progress_bar_spacecing * 2 + progress_bar_width, progress_bar_y - 16)
+  love.graphics.print("Speed:", progress_bar_spacecing * 3 + progress_bar_width * 2, progress_bar_y - 16)
+
+  local heal_raciot = spaceship.heal / spaceship.max_heal
+  local power_raciot = spaceship.power / spaceship.max_power
+  local speed_raciot = spaceship.speed.y / spaceship.max_speed.y
+
+  love.graphics.setColor(255 - 255 * heal_raciot, 255 * heal_raciot, 0, 255)
+  progress_bar(heal_raciot, 1, progress_bar_spacecing, progress_bar_y, progress_bar_width, 16)
+
+  love.graphics.setColor(255, 255, 255, 255)
+  progress_bar(power_raciot, 1, progress_bar_spacecing * 2 + progress_bar_width, progress_bar_y, progress_bar_width, 16)
+
+  love.graphics.setColor(255, 255, 255, 255)
+  progress_bar(speed_raciot, 1, progress_bar_spacecing * 3 + progress_bar_width * 2, progress_bar_y, progress_bar_width, 16)
+
+  love.graphics.setColor(255, 255, 255, 255)
 end
 -- Spaceship -------------------------------------------------------------------
 
 function setup_space_ship()
   spaceship = {}
 
+  spaceship.heal = 50
+  spaceship.max_heal = 100
+
+  spaceship.max_power = 10000
+  spaceship.power = 10000
+
   spaceship.cooldown = 20
   spaceship.cooldown_time = 20
+
+  spaceship.damage_cooldown = 0
+
   spaceship.shooted_bullet = {}
   spaceship.shooted_bullet_count = 1
 
@@ -234,17 +307,19 @@ function update_spaceship(delta_time)
 
   if key_left then
     spaceship.speed.x = spaceship.speed.x - 100 * delta_time
+    -- spaceship.speed.x = -spaceship.max_speed.x
     spaceship.speed_up_x = true
   end
 
   if key_right then
     spaceship.speed.x = spaceship.speed.x + 100 * delta_time
+    -- spaceship.speed.x = spaceship.max_speed.x
     spaceship.speed_up_x = true
   end
 
   -- check speed x -------------------------------------------------------------
   if not spaceship.speed_up_x then
-    spaceship.speed.x = spaceship.speed.x * 0.9
+    spaceship.speed.x = spaceship.speed.x * 0.75
   end
 
   if spaceship.speed.x > spaceship.max_speed.x then
@@ -278,6 +353,11 @@ function update_spaceship(delta_time)
     spaceship_shoot_bullet(spaceship.x + spaceship.width / 2 - 2)
   end
 
+  -- Damage cooldown -----------------------------------------------------------
+  if spaceship.damage_cooldown > 0 then
+    spaceship.damage_cooldown = spaceship.damage_cooldown * 0.9
+  end
+
   -- sound effects -------------------------------------------------------------
   asset_speedup:setVolume((spaceship.speed.y / spaceship.max_speed.y) / 2)
   asset_speedup:setPitch(1 + (spaceship.speed.y / spaceship.max_speed.y) / 2)
@@ -293,8 +373,13 @@ function draw_spaceship()
   love.graphics.push()
   love.graphics.translate(math.random(-50, 50) / 50 * size_factor, 0)
   love.graphics.draw(asset_spaceship, spaceship.x, spaceship.y, 0, 2, 2 - (size_factor) / 5)
+
   love.graphics.setColor(255,255,255,255 * size_factor)
   love.graphics.draw(asset_truster, spaceship.x, spaceship.y, 0, 2, 2  - (size_factor) / 5)
+
+  love.graphics.setColor(255, 255, 255, spaceship.damage_cooldown)
+  love.graphics.draw(asset_shield, spaceship.x, spaceship.y - 10, 0, 2, 2  - (size_factor) / 5)
+
   love.graphics.setColor(255,255,255,255)
   love.graphics.pop()
 end
@@ -447,18 +532,33 @@ function entity_colide_entity(entity_a, entity_b)
 end
 
 function entity_colide_spaceship(entity)
-
+  if entity.type == "asteroid" then
+    spaceship.heal = spaceship.heal - 10
+    spaceship.power = spaceship.power - 100
+    spaceship.damage_cooldown = 255
+    destroy_entity(entity)
+  end
 end
 
 function entity_colide_spaceship_shoot(entity, shoot)
   if entity.type == "asteroid" then
+    destroy_entity(entity)
+    spaceship.shooted_bullet[shoot] = nil
+  end
+end
+
+function destroy_entity(entity)
+  -- asteroid ------------------------------------------------------------------
+  if entity.type == "asteroid" then
+    soundmanager_play("assets/sound_effects/explosion.wav")
+    remove_entity(entity)
+
     for i=1,10 do
       local brightness = math.random(50, 100) / 100
       emite_particle("dot", entity.x + 32, entity.y + 32, 4, math.random(-100, 100) / 100, (-math.random(0, 500)) / 100, 1 * math.random(50, 100) / 100, 86 * brightness, 68 * brightness, 58 * brightness)
     end
-    spaceship.shooted_bullet[shoot] = nil
-    remove_entity(entity)
   end
+
 end
 
 -- Entity managment ------------------------------------------------------------
@@ -478,7 +578,14 @@ function emite_particle(type, x, y, size, speed_x, speed_y, life_time, red, gree
 end
 
 -- End Game Screen -------------------------------------------------------------
+function end_game_switch()
+  current_scene = "end_game"
+  asset_speedup:stop()
+end
+
 function end_game_setup()
+
+    text_game_over = love.graphics.newText( asset_font_bebas_big, "Game Over" )
 
 end
 
@@ -487,10 +594,26 @@ function update_end_game()
 end
 
 function draw_end_game()
+  draw_paralax(game.progress, 0.25)
+  draw_spaceship_bullet()
+  draw_entities()
 
+  love.graphics.draw(text_game_over, love.graphics.getWidth() / 2 - text_game_over:getWidth() / 2, love.graphics.getHeight() / 2 - text_game_over:getHeight() / 2)
+  love.graphics.rectangle("line", love.graphics.getWidth() / 2 - text_game_over:getWidth() / 2 - 16, love.graphics.getHeight() / 2 - text_game_over:getHeight() / 2 - 6 - 16, text_game_over:getWidth() + 32, text_game_over:getHeight() + 32)
+
+  love.graphics.rectangle("line", 4, 4, love.graphics.getWidth() - 8, love.graphics.getHeight() - 8)
+
+  if button("Try Egain !", love.graphics.getWidth() / 2 - text_game_over:getWidth() / 2 - 16, love.graphics.getHeight() / 2 + 64, text_game_over:getWidth() + 32, 32) then
+
+  end
 end
 
 -- GUI -------------------------------------------------------------------------
+
+function progress_bar(value, max_value, x, y, width, height)
+  love.graphics.rectangle("line", x + 1, y + 1, width - 1, height - 1)
+  love.graphics.rectangle("fill", x + 4, y + 4, (width - 8) * (value / max_value), height - 8)
+end
 
 function button(text, x, y, width, height)
 
