@@ -14,7 +14,9 @@ mkdir "bin"
 
 :: Zip up the project
 echo Building .love file...
-7z a -tzip "bin\SolarSpeedRush.love"
+cd game
+7z a -tzip "..\bin\SolarSpeedRush.love"
+cd..
 
 :: Copy LOVE2D DLLs to the bin directory
 echo Copying DLLs...
