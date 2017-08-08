@@ -441,9 +441,9 @@ function update_spaceship_bullet()
     else
       e.y = e.y - spaceship.bullet_speed
 
-      for i=1,5 do
+      for i=0,2 do
         local brightness = math.random(50, 100) / 100
-        emite_particle("dot", e.x, e.y, 1, math.random(-100, 100) / 100, (-math.random(100, 0)) / 100, 1 * math.random(50, 100) / 100, 255 * brightness, 255 * brightness, 255)
+        emite_particle("dot", e.x, e.y, 1, math.random(-100, 100) / 500, math.random(-100, 100) / 100, 1 * math.random(50, 100) / 100, 255 * brightness, 255 * brightness, 255)
       end
 
       for k,v in pairs(game.entities) do
@@ -650,12 +650,16 @@ function destroy_entity(entity)
       local brightness = math.random(50, 100) / 100
       emite_particle("dot", entity.x + 32, entity.y + 32, 4, math.random(-100, 100) / 100, (-math.random(0, 500)) / 100, 1 * math.random(50, 100) / 100, 86 * brightness, 68 * brightness, 58 * brightness)
     end
+    for i=1,4 do
+      emite_particle("asteroid_frag", entity.x + 32, entity.y + 32, 4, math.random(-100, 100) / 100, (-math.random(0, 500)) / 100, 1 * math.random(50, 100) / 100, 255, 255, 255)
+    end
   end
 
   if entity.type == "heal_pack" then
     soundmanager_play("assets/sound_effects/healpack.wav")
     remove_entity(entity)
 
+	
     for i=1,10 do
       local brightness = math.random(50, 100) / 100
       emite_particle("dot", entity.x + 32, entity.y + 32, 4, math.random(-100, 100) / 100, (-math.random(-100, 100)) / 100, 1 * math.random(50, 100) / 100, 255 * brightness, 255 * brightness, 255 * brightness)
